@@ -1,0 +1,13 @@
+# language noise
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+dist/
+bin/
+obj/
+*.user
+.vs/
+.idea/
+.vscode/
+.DS_Store

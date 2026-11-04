@@ -2,7 +2,7 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadDay } from "./readers.js";
-import { matchById, type Finding } from "./match.js";
+import { matchById, matchWithoutId, type Finding } from "./match.js";
 import type { Transaction } from "./models.js"
 import { isoSeconds } from "./normalize.js";
 
@@ -12,11 +12,10 @@ function run(date: string, dataDir: string): number {
   const { provider, ledger } = loadDay(dataDir, date);
   console.log(`${date}: ${provider.length} provider records, ${ledger.length} ledger rows`);
 
-  const findings = matchById(provider, ledger);
+  const findings = [...matchById(provider, ledger), ...matchWithoutId(provider, ledger)];
   for (const f of findings) console.log(describe(f));
 
-  const noId = provider.filter((t) => t.id === null).length + ledger.filter((t) => t.id === null).length;
-  console.log(`${findings.length} findings. ${noId} rows without a transaction id not checked yet`);
+  console.log(`${findings.length} findings.`);
 
   return 0;
 }
@@ -31,7 +30,11 @@ function describe(f: Finding): string {
       return `AMOUNT MISMATCH ${f.provider.id}  provider ${euros(f.provider.amountCents)}, 
       ledger ${euros(f.ledger.amountCents)} (${f.ledger.ref})`;
     case "duplicate_id":
-      return `DUPLICATE ID ${f.id} ${f.rows.length} rows: ${f.rows.map((r) => `${r.source} ${euros(r.amountCents)} ${isoSeconds(r.timestamp)}`).join("; ")}`;
+      return `DUPLICATE ID ${f.id} ${f.rows.length} rows: ${f.rows.map((r) => 
+        `${r.source} ${euros(r.amountCents)} ${isoSeconds(r.timestamp)}`).join("; ")}`;
+    case "ambiguous_match":
+      return `NEEDS REVIEW  ${row(f.provider)}  could be: ${f.candidates.map((c) => 
+        `${c.ref} ${isoSeconds(c.timestamp)}`).join(", ")}`;
   }
 }
 

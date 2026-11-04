@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Transaction } from "../src/models.js";
-import { matchById, type Finding } from "../src/match.js";
+import { MATCH_WINDOW_SECONDS, matchById, matchWithoutId, type Finding } from "../src/match.js";
 
 function tx(partial: Partial<Transaction> & Pick<Transaction, "source" | "id" | "amountCents">): Transaction {
   return {
@@ -73,7 +73,7 @@ test("a duplicated id with no counterpart is still a duplicate, not a missing ro
   ] satisfies Finding[]);
 });
 
-test("rows with a null id are ignored", () => {
+test("matchById ignores rows with a null id", () => {
   const unnamed = tx({ source: "provider", id: null, amountCents: 100, ref: "file:1" });
   const alsoUnnamed = tx({ source: "ledger", id: null, amountCents: 100, ref: "L-1" });
 
@@ -105,4 +105,137 @@ test("each id is classified on its own", () => {
 
 test("empty inputs produce no findings", () => {
   assert.deepEqual(matchById([], []), []);
+  assert.deepEqual(matchWithoutId([], []), []);
+});
+
+const bookedAt = new Date("2026-03-01T12:00:00Z");
+
+function secondsLater(seconds: number): Date {
+  return new Date(bookedAt.getTime() + seconds * 1000);
+}
+
+test("a null-id pair with the same amount inside the window matches", () => {
+  const provider = tx({
+    source: "provider",
+    id: null,
+    amountCents: 100,
+    timestamp: bookedAt,
+    merchant: "card",
+  });
+  const ledger = tx({
+    source: "ledger",
+    id: null,
+    amountCents: 100,
+    timestamp: secondsLater(MATCH_WINDOW_SECONDS),
+    merchant: "ledger text",
+  });
+
+  assert.deepEqual(matchWithoutId([provider], [ledger]), []);
+});
+
+test("a ledger row booked before the provider is not a match", () => {
+  const provider = tx({ source: "provider", id: null, amountCents: 100, timestamp: bookedAt });
+  const ledger = tx({
+    source: "ledger",
+    id: null,
+    amountCents: 100,
+    timestamp: secondsLater(-1),
+  });
+
+  assert.deepEqual(matchWithoutId([provider], [ledger]), [
+    { kind: "missing_in_ledger", provider },
+    { kind: "missing_in_provider", ledger },
+  ] satisfies Finding[]);
+});
+
+test("the same amount just outside the window is missing on both sides", () => {
+  const provider = tx({ source: "provider", id: null, amountCents: 100, timestamp: bookedAt });
+  const ledger = tx({
+    source: "ledger",
+    id: null,
+    amountCents: 100,
+    timestamp: secondsLater(MATCH_WINDOW_SECONDS + 1),
+  });
+
+  assert.deepEqual(matchWithoutId([provider], [ledger]), [
+    { kind: "missing_in_ledger", provider },
+    { kind: "missing_in_provider", ledger },
+  ] satisfies Finding[]);
+});
+
+test("a different amount is not a match", () => {
+  const provider = tx({ source: "provider", id: null, amountCents: 100, timestamp: bookedAt });
+  const ledger = tx({ source: "ledger", id: null, amountCents: 101, timestamp: secondsLater(10) });
+
+  assert.deepEqual(matchWithoutId([provider], [ledger]), [
+    { kind: "missing_in_ledger", provider },
+    { kind: "missing_in_provider", ledger },
+  ] satisfies Finding[]);
+});
+
+test("several ledger rows for one provider are an ambiguous match", () => {
+  const provider = tx({ source: "provider", id: null, amountCents: 100, timestamp: bookedAt, ref: "p" });
+  const first = tx({ source: "ledger", id: null, amountCents: 100, timestamp: secondsLater(8), ref: "l1" });
+  const second = tx({ source: "ledger", id: null, amountCents: 100, timestamp: secondsLater(160), ref: "l2" });
+
+  assert.deepEqual(matchWithoutId([provider], [first, second]), [
+    { kind: "ambiguous_match", provider, candidates: [first, second] },
+  ] satisfies Finding[]);
+});
+
+test("two providers that share one ledger row are both ambiguous", () => {
+  const first = tx({ source: "provider", id: null, amountCents: 100, timestamp: bookedAt, ref: "p1" });
+  const second = tx({
+    source: "provider",
+    id: null,
+    amountCents: 100,
+    timestamp: secondsLater(20),
+    ref: "p2",
+  });
+  const ledger = tx({ source: "ledger", id: null, amountCents: 100, timestamp: secondsLater(30), ref: "l" });
+
+  assert.deepEqual(matchWithoutId([first, second], [ledger]), [
+    { kind: "ambiguous_match", provider: first, candidates: [ledger] },
+    { kind: "ambiguous_match", provider: second, candidates: [ledger] },
+  ] satisfies Finding[]);
+});
+
+test("a unique pair stays quiet while other null-id rows are reported", () => {
+  const matchedProvider = tx({ source: "provider", id: null, amountCents: 100, timestamp: bookedAt, ref: "p-ok" });
+  const unmatchedProvider = tx({
+    source: "provider",
+    id: null,
+    amountCents: 200,
+    timestamp: bookedAt,
+    ref: "p-miss",
+  });
+  const matchedLedger = tx({
+    source: "ledger",
+    id: null,
+    amountCents: 100,
+    timestamp: secondsLater(8),
+    ref: "l-ok",
+  });
+  const unmatchedLedger = tx({
+    source: "ledger",
+    id: null,
+    amountCents: 300,
+    timestamp: secondsLater(8),
+    ref: "l-miss",
+  });
+
+  assert.deepEqual(matchWithoutId(
+    [matchedProvider, unmatchedProvider],
+    [matchedLedger, unmatchedLedger],
+  ), [
+    { kind: "missing_in_ledger", provider: unmatchedProvider },
+    { kind: "missing_in_provider", ledger: unmatchedLedger },
+  ] satisfies Finding[]);
+});
+
+test("matchWithoutId ignores rows that already have an id", () => {
+  const provider = tx({ source: "provider", id: "a", amountCents: 100, timestamp: bookedAt });
+  const ledger = tx({ source: "ledger", id: "b", amountCents: 100, timestamp: secondsLater(10) });
+
+  assert.deepEqual(matchWithoutId([provider], [ledger]), []);
 });

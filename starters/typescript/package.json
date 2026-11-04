@@ -6,7 +6,8 @@
   "scripts": {
     "start": "tsx src/cli.ts",
     "test": "node --import tsx --test test/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "explore": "tsx scripts/explore.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

@@ -5,17 +5,26 @@ import { loadDay } from "./readers.js";
 import { matchById, matchWithoutId, type Finding } from "./match.js";
 import type { Transaction } from "./models.js"
 import { isoSeconds } from "./normalize.js";
+import { reconcile } from "./reconcile.js";
+import { loadState, saveState } from "./state.js";
 
 const DEFAULT_DATA_DIR = resolve(fileURLToPath(import.meta.url), "../../../../data");
+const DEFAULT_STATE_FILE = resolve(fileURLToPath(import.meta.url), "../../../../state/recon-state.json");
 
-function run(date: string, dataDir: string): number {
+function run(date: string, dataDir: string, stateFile: string): number {
   const { provider, ledger } = loadDay(dataDir, date);
   console.log(`${date}: ${provider.length} provider records, ${ledger.length} ledger rows`);
 
-  const findings = [...matchById(provider, ledger), ...matchWithoutId(provider, ledger)];
-  for (const f of findings) console.log(describe(f));
+  const result = reconcile(loadState(stateFile), provider, ledger);
+  saveState(stateFile, result.state);
 
-  console.log(`${findings.length} findings.`);
+  console.log(`\nNEW (${result.newFindings.length})`);
+  for (const f of result.newFindings) console.log(describe(f));
+
+  console.log(`\nRESOLVED SINCE LAST RUN (${result.resolved.length})`);
+  for (const f of result.resolved) console.log(describe(f));
+
+  console.log(`\nSTILL OPEN FROM EARLIER RUNS: ${result.stillOpen.length}`);
 
   return 0;
 }
@@ -49,20 +58,22 @@ function euros(cents: number): string {
 function main(argv: string[]): number {
   const [command, ...rest] = argv;
   if (command !== "run") {
-    console.error("usage: recon run --date YYYY-MM-DD [--data-dir <path>]");
+    console.error("usage: recon run --date YYYY-MM-DD [--data-dir <path>] [--state <file>]");
     return 2;
   }
   let date: string | undefined;
   let dataDir = DEFAULT_DATA_DIR;
+  let stateFile = DEFAULT_STATE_FILE;
   for (let i = 0; i < rest.length; i++) {
     if (rest[i] === "--date") date = rest[++i];
     else if (rest[i] === "--data-dir") dataDir = resolve(rest[++i]);
+    else if (rest[i] === "--state") stateFile = resolve(rest[++i]);
   }
   if (!date) {
     console.error("--date is required");
     return 2;
   }
-  return run(date, dataDir);
+  return run(date, dataDir, stateFile);
 }
 
 process.exit(main(process.argv.slice(2)));

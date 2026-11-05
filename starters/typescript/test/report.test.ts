@@ -29,10 +29,10 @@ test("an unchanged run names the date, the rows read, and that nothing changed",
 
   assert.equal(report, [
     "Reconciliation for 2026-03-01",
-    "Read 2 provider payments and 3 ledger boookings.",
+    "Read 2 provider payments and 3 ledger bookings.",
     "Times are Amsterdam time.",
     "",
-    "Nothing changed since last run.",
+    "Nothing changed since the last run.",
     "",
     "STILL OPEN FROM EARLIER RUNS (0)",
   ].join("\n"));
@@ -70,16 +70,16 @@ test("still-open findings are counted by group and not listed again", () => {
 
   assert.equal(report, [
     "Reconciliation for 2026-03-02",
-    "Read 4 provider payments and 5 ledger boookings.",
+    "Read 4 provider payments and 5 ledger bookings.",
     "Times are Amsterdam time.",
     "",
-    "Nothing changed since last run.",
+    "Nothing changed since the last run.",
     "",
     "STILL OPEN FROM EARLIER RUNS (6)",
     "     2    paid at the provider, not in the ledger",
     "     1    in the ledger, no payment at the provider",
     "     1    amount differs between provider and ledger",
-    "     1    please check by hand",
+    "     2    please check by hand",
   ].join("\n"));
 });
 
@@ -173,7 +173,7 @@ test("new and solved findings are printed in group order, earliest first", () =>
 
   assert.equal(report, [
     "Reconciliation for 2026-03-01",
-    "Read 8 provider payments and 9 ledger boookings.",
+    "Read 8 provider payments and 9 ledger bookings.",
     "Times are Amsterdam time.",
     "",
     "6 new to look at, 1 solved since the last run.",
@@ -189,8 +189,7 @@ test("new and solved findings are printed in group order, earliest first", () =>
     "    1 Mar, 14:00      €2.50  Bakery  booking L2 for payment pay-2",
     "",
     "  Amount differs between provider and ledger (1)",
-    "    1 Mar, 16:00     €10.00  Tram  payment pay-3: ledger has €8.00, ",
-    "            €2.00 less",
+    "    1 Mar, 16:00     €10.00  Tram  payment pay-3: ledger has €8.00, €2.00 less",
     "",
     "  Please check by hand (1)",
     "    1 Mar, 11:00      €0.75  Kiosk  no transaction id, could be any of these bookings: L8 (1 Mar, 11:02), L9 (1 Mar, 11:01)",
@@ -220,7 +219,7 @@ test("a ledger amount above the provider amount is described as more", () => {
 
   assert.equal(report, [
     "Reconciliation for 2026-03-01",
-    "Read 1 provider payments and 1 ledger boookings.",
+    "Read 1 provider payments and 1 ledger bookings.",
     "Times are Amsterdam time.",
     "",
     "1 new to look at, 0 solved since the last run.",
@@ -228,14 +227,13 @@ test("a ledger amount above the provider amount is described as more", () => {
     "NEW (1)",
     "",
     "  Amount differs between provider and ledger (1)",
-    "    1 Mar, 13:00      €1.00  More  payment m: ledger has €1.50, ",
-    "            €0.50 more",
+    "    1 Mar, 13:00      €1.00  More  payment m: ledger has €1.50, €0.50 more",
     "",
     "STILL OPEN FROM EARLIER RUNS (0)",
   ].join("\n"));
 });
 
-test("a duplicate id is counted but not printed", () => {
+test("a duplicate id is listed for review", () => {
   const row = tx({ source: "provider", id: "dup", amountCents: 100, ref: "p1" });
   const report = formatReport("2026-03-01", 2, 0, result({
     newFindings: [{ kind: "duplicate_id", id: "dup", rows: [row, { ...row, ref: "p2" }] }],
@@ -243,12 +241,15 @@ test("a duplicate id is counted but not printed", () => {
 
   assert.equal(report, [
     "Reconciliation for 2026-03-01",
-    "Read 2 provider payments and 0 ledger boookings.",
+    "Read 2 provider payments and 0 ledger bookings.",
     "Times are Amsterdam time.",
     "",
     "1 new to look at, 0 solved since the last run.",
     "",
     "NEW (1)",
+    "",
+    "  Please check by hand (1)",
+    "    1 Mar, 13:00      €1.00  merchant  payment dup is in the provider export 2x and in the ledger 0x. Charged twice, or a duplicate line?",
     "",
     "STILL OPEN FROM EARLIER RUNS (0)",
   ].join("\n"));
@@ -269,7 +270,7 @@ test("summer times are shown in Amsterdam daylight time", () => {
 
   assert.equal(report, [
     "Reconciliation for 2026-07-01",
-    "Read 1 provider payments and 0 ledger boookings.",
+    "Read 1 provider payments and 0 ledger bookings.",
     "Times are Amsterdam time.",
     "",
     "1 new to look at, 0 solved since the last run.",
@@ -281,4 +282,19 @@ test("summer times are shown in Amsterdam daylight time", () => {
     "",
     "STILL OPEN FROM EARLIER RUNS (0)",
   ].join("\n"));
+});
+
+test("every kind of finding is shown in some group", () => {
+  const p = tx({ source: "provider", id: "pt_1", amountCents: 100 });
+  const l = tx({ source: "ledger", id: "pt_1", amountCents: 100, ref: "LG-1" });
+  const all: Finding[] = [
+    { kind: "missing_in_ledger", provider: p },
+    { kind: "missing_in_provider", ledger: l },
+    { kind: "amount_mismatch", provider: p, ledger: l },
+    { kind: "duplicate_id", id: "pt_1", rows: [p, p] },
+    { kind: "ambiguous_match", provider: p, candidates: [l, l] },
+  ];
+  const report = formatReport("2026-03-01", 1, 1, result({ stillOpen: all }));
+  const counts = [...report.matchAll(/^\s+(\d+)\s+[a-z]/gm)].map((m) => Number(m[1]));
+  assert.equal(counts.reduce((a, b) => a + b, 0), all.length);
 });

@@ -1,6 +1,6 @@
-import { Finding } from "./match.js";
-import { RunResult } from "./reconcile.js";
-import { Transaction } from "./models.js";
+import type { Finding } from "./match.js";
+import type { RunResult } from "./reconcile.js";
+import type { Transaction } from "./models.js";
 
 type Kind = Finding["kind"];
 
@@ -9,19 +9,19 @@ const GROUPS: { title: string; kinds: Kind[] }[] = [
     { title: "Paid at the provider, not in the ledger", kinds: ["missing_in_ledger"] },
     { title: "In the ledger, no payment at the provider", kinds: ["missing_in_provider"] },
     { title: "Amount differs between provider and ledger", kinds: ["amount_mismatch"] },
-    { title: "Please check by hand", kinds: ["ambiguous_match"] },
+    { title: "Please check by hand", kinds: ["duplicate_id", "ambiguous_match"] },
 ];
 
 export function formatReport(date: string, providerRows: number, ledgerRows: number, result: RunResult): string {
     const { newFindings, resolved, stillOpen } = result;
     const out = [
         `Reconciliation for ${date}`,
-        `Read ${providerRows} provider payments and ${ledgerRows} ledger boookings.`,
+        `Read ${providerRows} provider payments and ${ledgerRows} ledger bookings.`,
         "Times are Amsterdam time.",
         "",
         newFindings.length || resolved.length 
         ? `${newFindings.length} new to look at, ${resolved.length} solved since the last run.`
-        : "Nothing changed since last run.",
+        : "Nothing changed since the last run.",
     ];
 
     out.push(...section("NEW", newFindings));
@@ -67,17 +67,19 @@ function detail(f: Finding): string {
         return `booking ${f.ledger.ref}${f.ledger.id ? ` for payment ${f.ledger.id}` : ", no transaction id"}`;
       case "amount_mismatch": {
         const diff = f.ledger.amountCents - f.provider.amountCents;
-        return `payment ${f.provider.id}: ledger has ${euros(f.ledger.amountCents)}, 
-            ${euros(Math.abs(diff))} ${diff > 0 ? "more" : "less"}`;
+        const direction = diff > 0 ? "more" : "less";
+        return `payment ${f.provider.id}: ledger has ${euros(f.ledger.amountCents)}, ${euros(Math.abs(diff))} ${direction}`;
       }
       case "duplicate_id": {
         const atProvider = f.rows.filter((r) => r.source === "provider").length;
-        return `payment ${f.id} is in the provider export ${atProvider}x and in the ledger ${f.rows.length - atProvider}x. 
-            Charged twice, or a duplicate line?`;
+        const inLedger = f.rows.length - atProvider;
+        const question = "Charged twice, or a duplicate line?";
+        return `payment ${f.id} is in the provider export ${atProvider}x and in the ledger ${inLedger}x. ${question}`;
       }
       case "ambiguous_match":
-        return `no transaction id, could be any of these bookings: ${f.candidates.map((c) => 
-            `${c.ref} (${time(c.timestamp)})`).join(", ")}`;
+        return `no transaction id, could be any of these bookings: ${f.candidates
+          .map((c) => `${c.ref} (${time(c.timestamp)})`)
+          .join(", ")}`;
     }
   }
 

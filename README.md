@@ -101,6 +101,30 @@ I explored the data before writing any matching code. The details and numbers ar
 - **Provider rows without an id can only be referenced by file and line** in the report.
 - The merchant names map one-to-one between the systems. That could be an extra check when matching rows without an id; I didn't need it for this data.
 
+## Sanne's tickets
+ 
+I didn't build any of the tickets in [docs/ASSIGNMENT.md](docs/ASSIGNMENT.md#future-tickets). I stopped once the core worked, at the time box. This is how I read them, and what I'd ask Sanne before starting.
+ 
+**FIN-121, "does the total for yesterday match or not?"** This is the one I'd pick first. Her manager wants a yes or no she can repeat. Comparing the raw provider and ledger totals for a day would almost never give "yes", because rows regularly arrive a day late. A useful answer is one line at the top of the report: whether the day adds up, and if not, how much is still open and how much is a known amount difference.
+ 
+*I'd ask:* does "match" mean the totals are equal, or that every difference is explained? Do rows that only arrive the next day count as matching?
+ 
+**FIN-124, "I've already dealt with it. Can it remember that?"** Partly addressed already: items from earlier runs are only counted, not listed again. But they still count as open. She needs a way to mark an item as handled, so it leaves the open count.
+ 
+*I'd ask:* what does "dealt with" mean: fixed in the ledger, or checked and accepted as it is? Should an item come back if something about it changes?
+ 
+**FIN-118, "on Mondays it gets confusing which day something belongs to".** This is the open question about UTC vs Amsterdam days. The files are split by UTC day, but the report shows Amsterdam time, so a payment at 23:30 UTC on Saturday is in Saturday's file and shows as Sunday 00:30. Over a weekend that adds up.
+ 
+*I'd ask:* would one report covering Friday to Sunday help, or three separate ones? Should the day boundary follow Amsterdam time?
+ 
+**FIN-112, "can I just open this myself in the morning?"** She wants to stop depending on an engineer every day. That's mostly about running the tool on a schedule and putting the report somewhere she can reach, less about the tool itself.
+ 
+*I'd ask:* is receiving it every morning enough (for example by email), or does she need to run it herself on demand?
+ 
+**FIN-127, "is this getting better or worse?"** This needs history: a small summary saved per day (counts and euros per group) that can be compared over weeks. The state file has every row, but no per-day summaries yet.
+ 
+*I'd ask:* better or worse in what: the number of problems, the euros involved, or how long they stay open? Compared with which period?
+
 ## How I worked
 
 One branch and pull request per step, merged in this order:

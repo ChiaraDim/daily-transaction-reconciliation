@@ -27,7 +27,7 @@ Other commands:
 ```bash
 npm test            # unit tests
 npm run typecheck
-npm run explore     # the data exploration behind docs/data-exploration.md
+npm run explore     # the data exploration behind docs/DATA_EXPLORATION.md
 ```
 
 ## What the report looks like
@@ -36,7 +36,8 @@ Shortened output of the 2026-03-02 run, after 2026-03-01:
 
 ```
 Reconciliation for 2026-03-02
-Read 1973 provider payments and 1965 ledger bookings. Times are Amsterdam time.
+Read 1973 provider payments and 1965 ledger bookings.
+Times are Amsterdam time.
 
 10 new to look at, 6 solved since the last run.
 
@@ -45,6 +46,7 @@ NEW (10)
   Paid at the provider, not in the ledger (4)
     2 Mar, 03:16     €43.93  ETOS 0917        payment pt_a395d9c4cf75
     ...
+
   Amount differs between provider and ledger (3)
     2 Mar, 12:38     €23.85  DE BIJENKORF  payment pt_1e03a7f3035d: ledger has €24.20, €0.35 more
     ...
@@ -53,10 +55,10 @@ SOLVED SINCE THE LAST RUN (6)
   ...
 
 STILL OPEN FROM EARLIER RUNS (19)
-      8  paid at the provider, not in the ledger
-      4  in the ledger, no payment at the provider
-      5  amount differs between provider and ledger
-      2  please check by hand
+     8    paid at the provider, not in the ledger
+     4    in the ledger, no payment at the provider
+     5    amount differs between provider and ledger
+     2    please check by hand
 ```
 
 The report is written for finance, not engineers. It uses plain words (payments and bookings), shows euros and Amsterdam time, and is grouped by what to do. The cases the tool won't guess go under "Please check by hand". Items still open from earlier runs are counted, not listed again.
@@ -102,27 +104,27 @@ I explored the data before writing any matching code. The details and numbers ar
 - The merchant names map one-to-one between the systems. That could be an extra check when matching rows without an id; I didn't need it for this data.
 
 ## Sanne's tickets
- 
-I didn't build any of the tickets in [docs/ASSIGNMENT.md](docs/ASSIGNMENT.md#future-tickets). I stopped once the core worked, at the time box. This is how I read them, and what I'd ask Sanne before starting.
- 
+
+I didn't build any of the tickets in [docs/ASSIGNMENT.md](docs/ASSIGNMENT.md#future-tickets). I stopped once the core worked, within the time box. This is how I read them, and what I'd ask Sanne before starting.
+
 **FIN-121, "does the total for yesterday match or not?"** This is the one I'd pick first. Her manager wants a yes or no she can repeat. Comparing the raw provider and ledger totals for a day would almost never give "yes", because rows regularly arrive a day late. A useful answer is one line at the top of the report: whether the day adds up, and if not, how much is still open and how much is a known amount difference.
- 
+
 *I'd ask:* does "match" mean the totals are equal, or that every difference is explained? Do rows that only arrive the next day count as matching?
- 
+
 **FIN-124, "I've already dealt with it. Can it remember that?"** Partly addressed already: items from earlier runs are only counted, not listed again. But they still count as open. She needs a way to mark an item as handled, so it leaves the open count.
- 
+
 *I'd ask:* what does "dealt with" mean: fixed in the ledger, or checked and accepted as it is? Should an item come back if something about it changes?
- 
+
 **FIN-118, "on Mondays it gets confusing which day something belongs to".** This is the open question about UTC vs Amsterdam days. The files are split by UTC day, but the report shows Amsterdam time, so a payment at 23:30 UTC on Saturday is in Saturday's file and shows as Sunday 00:30. Over a weekend that adds up.
- 
+
 *I'd ask:* would one report covering Friday to Sunday help, or three separate ones? Should the day boundary follow Amsterdam time?
- 
+
 **FIN-112, "can I just open this myself in the morning?"** She wants to stop depending on an engineer every day. That's mostly about running the tool on a schedule and putting the report somewhere she can reach, less about the tool itself.
- 
+
 *I'd ask:* is receiving it every morning enough (for example by email), or does she need to run it herself on demand?
- 
+
 **FIN-127, "is this getting better or worse?"** This needs history: a small summary saved per day (counts and euros per group) that can be compared over weeks. The state file has every row, but no per-day summaries yet.
- 
+
 *I'd ask:* better or worse in what: the number of problems, the euros involved, or how long they stay open? Compared with which period?
 
 ## How I worked
@@ -134,19 +136,25 @@ One branch and pull request per step, merged in this order:
 3. Match rows without a transaction id on amount and time
 4. Keep state between runs and report only what changed
 5. Add a report written for finance
+6. Show duplicate ids in the report
+7. Add README and move the brief to docs/
+8. Run typecheck and tests on every PR
+9. Add my reading of Sanne's tickets
 
-Each PR description says what changed, the decisions behind it, and what it deliberately left out.
+Each PR description says what changed, the decisions behind it, and what it deliberately left out. CI runs the typecheck and tests on every pull request.
 
-Time spent: about _2.5_ hours.
+Time spent: about 2.5 hours.
 
 ## Use of AI
 
-I used Claude, during the whole exercise, mostly to write and check things with.
+I used Claude, an AI assistant, during the whole exercise, mostly to write and check things with.
 
 **What I used it for:**
 
-- Writing commit messages, PR descriptions and documentation (this README and `docs/DATA_EXPLORATION.md`)
-- Writing the tests
-- Thinking through edge cases in the data: late rows, re-exports, duplicate ids, rows without an id
-- Drafting functions in the matching, state and report code
-- Reviewing my code and the tool's output
+- writing commit messages, PR descriptions and documentation (this README and `docs/DATA_EXPLORATION.md`)
+- writing the tests
+- thinking through edge cases in the data: late rows, re-exports, duplicate ids, rows without an id
+- drafting functions in the matching, state and report code
+- reviewing my code and the tool's output
+
+I read and ran all the code before committing it, and checked the numbers in the docs against the script's output.

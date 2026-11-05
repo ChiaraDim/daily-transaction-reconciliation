@@ -1,127 +1,128 @@
-# Take-home: Daily transaction reconciliation
+# Daily transaction reconciliation
 
-**Time box: 3 hours.** We mean it — an unfinished tool with clear reasoning beats a complete one without.
+A command-line tool that compares the payment provider's export with the internal ledger for one day, and reports to finance what doesn't match: what's new since the last run, what got solved, and how much is still open.
 
-## How to deliver
+The original assignment is in [docs/ASSIGNMENT.md](docs/ASSIGNMENT.md).
 
-**A GitHub or Azure DevOps repo link. Not a zip.**
+## Running it
 
-We look at how the work happened, not just the final state. Commit as you go rather than squashing everything into one push at the end. Beyond that, use the repo however you'd use it on a real project — branches, PRs, issues, whatever reflects how you actually work.
-
-## The situation
-
-Every morning, finance receives two exports covering the previous day:
-
-- `data/provider-YYYY-MM-DD.jsonl` — from our payment provider
-- `data/ledger-YYYY-MM-DD.csv` — from our internal ledger
-
-They should agree. They don't. Someone currently checks this by hand in a spreadsheet and it takes most of a morning.
-
-## What to build
-
-A tool that is run once per day and reports what doesn't match.
-
-```
-recon run --date 2026-03-01
-recon run --date 2026-03-02
-```
-
-1. **Report discrepancies** — transactions present on one side but not the other, and transactions on both sides with differing amounts.
-2. **Report only what changed.** The day-2 run shows new discrepancies and ones that have since resolved — not a re-list of everything from day 1. This means keeping state between runs.
-3. **Re-running a date must be safe.** Run `--date 2026-03-02` twice: the second run produces no new findings and no duplicated state.
-
-State can be a JSON file, SQLite, whatever you prefer. We don't care which.
-
-## Things you should know
-
-Most transactions have an ID on both sides. Some don't, and have to be matched on other fields. Where a match is uncertain, **flagging a record for a human to review is a good output, not a failure.** A confidently wrong reconciliation is worse than an admitted uncertainty.
-
-More generally: the data contains ambiguities this brief does not resolve. Finding them and deciding what to do is the exercise. If you'd want to ask a real stakeholder something, write the question down rather than stalling on it.
-
-The report is read by finance, not by engineers. That's a design constraint, not a formatting detail.
-
-## What we're not testing
-
-The core needs none of this: no auth, no database server, no deployment, no web UI, no packaging, no Docker or cloud config, no CLI framework. Printed output is fine. If a future ticket leads you to build one of them, that's your call. Adding them for their own sake earns nothing and costs you time.
-
-## Language
-
-**Use whichever language you're most productive in.** We ship thin starters for Python, TypeScript and C#, but Rust, Go, Java, Kotlin or anything else is just as welcome. We assess your reasoning and your report, not your language choice.
-
-If you pick a language without a starter, `docs/DATA_SPEC.md` gives you everything you need: both file formats field by field, the exact rules for turning amounts and timestamps into comparable values, and worked examples in `docs/normalize_golden.json`. Reading the files is plumbing, not the exercise, so don't spend more than a few minutes on it. Only ask: could someone on our team run it with the setup instructions you provide?
-
-## Documentation
-
-Document your thinking. **Format is entirely your call** — README, ADRs, issues, PR descriptions, commit messages, a single markdown file. We're interested in the choice you make as much as the content.
-
-What we want to be able to reconstruct: what ambiguities you hit, what you decided, what you'd want to confirm with someone before this went live, and what you'd do with another day.
-
-## Future tickets
-
-These were filed by Sanne, who runs finance operations and will be the person using your tool. They're reproduced exactly as she wrote them. **Only pick one up once the core works.** Building none of them is a perfectly good outcome.
-
-If you do take one, interpreting it is most of the work. Write down what you think Sanne actually needs, what you'd have asked her before starting, and why you picked that one.
-
-> **FIN-112**
-> Hi, is there a way I can just open this myself in the morning? Right now I have to ask someone on your side to run it and send me the result. Doesn't need to be fancy.
-
-> **FIN-118**
-> On Mondays I'm looking at Friday, Saturday and Sunday and it gets confusing which day something belongs to. Can it be less confusing?
-
-> **FIN-121**
-> My manager asked me "so does the total for yesterday match or not" and I realised I couldn't answer that from the report. Can it just tell me?
-
-> **FIN-124**
-> When something is flagged for me to look at, I look at it, and then... it's still there the next day. I've already dealt with it. Can it remember that?
-
-> **FIN-127**
-> Is this getting better or worse? I feel like there are more mismatches than last month but I have no way to tell.
-
-There is no hidden right answer here and no bonus for covering more than one. A small, well-judged interpretation of one ticket beats a large one, and a finished core with no ticket beats both.
-
-## On AI
-
-Use whatever tools you'd use on a normal working day. We assume you will. Mention where it helped and where you overrode it. We'll ask you to explain any part of what you submit, so don't ship code you haven't read.
-
-## What happens next
-
-A one-hour conversation with a senior engineer and someone from the business side. We'll have been through your repo beforehand and most of our questions will come from it. Nothing to prepare.
-
----
-
-## Getting started
-
-Everything you need is in this repo. `docs/DATA_SPEC.md` describes both files and the exact normalisation rules; `docs/normalize_golden.json` has worked examples.
-
-Three thin starters do the file reading and normalisation for you and stop exactly where the exercise begins. Each one loads both files for a date, prints the row counts, and leaves you an empty loop. Use one, or ignore them.
-
-### Python (3.11+, no dependencies)
-
-```bash
-cd starters/python
-python -m unittest            # the one test
-python -m recon run --date 2026-03-01
-```
-
-### TypeScript (Node 20+)
+Needs Node 20 or later. Everything runs from the TypeScript starter folder:
 
 ```bash
 cd starters/typescript
 npm install
-npm test
+
 npm start -- run --date 2026-03-01
+npm start -- run --date 2026-03-02
 ```
 
-### C# (.NET 8+)
+`npm start -- run --date …` is this project's version of `recon run --date …` from the brief.
+
+- **State** is kept in `state/recon-state.json` at the repo root, so each run only reports what changed. Use `--state <file>` to put it somewhere else. To start over, delete it: `rm -rf state` from the repo root, or `rm -rf ../../state` from `starters/typescript`.
+- **Data** is read from `data/` by default; use `--data-dir <path>` to point elsewhere.
+- Running the same date twice is safe: the second run says "Nothing changed since the last run."
+
+Other commands:
 
 ```bash
-cd starters/csharp
-dotnet test
-dotnet run --project Recon -- run --date 2026-03-01
+npm test            # unit tests
+npm run typecheck
+npm run explore     # the data exploration behind docs/data-exploration.md
 ```
 
-Each starter accepts `--data-dir <path>` if you move the data. State, matching, change detection and the report are yours to design; the starters contain none of that on purpose.
+## What the report looks like
 
-### Any other language
+Shortened output of the 2026-03-02 run, after 2026-03-01:
 
-Read `docs/DATA_SPEC.md`, check your parsing against `docs/normalize_golden.json`, and include the commands to run your tool in your own README. That's all we need.
+```
+Reconciliation for 2026-03-02
+Read 1973 provider payments and 1965 ledger bookings. Times are Amsterdam time.
+
+10 new to look at, 6 solved since the last run.
+
+NEW (10)
+
+  Paid at the provider, not in the ledger (4)
+    2 Mar, 03:16     €43.93  ETOS 0917        payment pt_a395d9c4cf75
+    ...
+  Amount differs between provider and ledger (3)
+    2 Mar, 12:38     €23.85  DE BIJENKORF  payment pt_1e03a7f3035d: ledger has €24.20, €0.35 more
+    ...
+
+SOLVED SINCE THE LAST RUN (6)
+  ...
+
+STILL OPEN FROM EARLIER RUNS (19)
+      8  paid at the provider, not in the ledger
+      4  in the ledger, no payment at the provider
+      5  amount differs between provider and ledger
+      2  please check by hand
+```
+
+The report is written for finance, not engineers. It uses plain words (payments and bookings), shows euros and Amsterdam time, and is grouped by what to do. The cases the tool won't guess go under "Please check by hand". Items still open from earlier runs are counted, not listed again.
+
+## How it works
+
+1. **Read and normalise** both files (from the starter: `readers.ts`, `normalize.ts`).
+2. **Match by transaction id** (`match.ts`): missing on either side, amount differs, or the same id more than once.
+3. **Match rows without an id** (`match.ts`): same amount, ledger booked 0–3 minutes after the provider, and only if the pair is strictly one-to-one. Anything else goes to review.
+4. **Compare with the previous run** (`reconcile.ts`, `state.ts`): every row seen so far is kept, all of them are matched again, and the findings are compared with the previous run's. That's what lets late rows solve older findings.
+5. **Print the report** (`report.ts`).
+
+## What I found in the data, and what I decided
+
+I explored the data before writing any matching code. The details and numbers are in [docs/DATA_EXPLORATION.md](docs/DATA_EXPLORATION.md). In short:
+
+| What I found | What I decided |
+|---|---|
+| Rows often arrive in the next day's file (5 of 9 ledger-only rows on day 1 got their provider row on day 2) | Keep state and match over all rows seen so far, so late rows solve the earlier finding |
+| The provider re-exports some rows in two files | Recognise rows already seen and skip them, so they're never reported twice |
+| The same id twice in one provider file, 4 seconds apart | Flag for review; don't pick one of the two |
+| Amount differences in patterns (€0.35 extra, decimal shifts, swapped digits) | Report both amounts and the difference, compared exactly in cents; don't guess the cause |
+| Rows without an id: most match on amount within 8–160s, one has two candidates | Match on amount plus a 3-minute window, only one-to-one; the rest goes to review |
+| Exports cover a UTC day, finance thinks in Amsterdam time | Show Amsterdam time in the report and say so in the header |
+
+## Questions I'd want answered before this goes live
+
+- How long can a row arrive late before it counts as really missing? Today a one-sided row is reported straight away and stays open until its partner arrives.
+- When amounts differ, which side is right: the provider or the ledger? And is the €0.35 a fee?
+- Is `pt_9f6ceae92af2`, in the provider export twice, a double charge?
+- Can one €249 Amazon payment really have two ledger bookings, or is that a double booking?
+- Should the report follow the UTC day of the exports or the Amsterdam day? (This is close to Sanne's ticket FIN-118.)
+- Why do some rows have no transaction id, and can that be fixed at the source?
+- Are the 23:59:59 timestamps real capture times?
+
+## Limitations, and what I'd do with another day
+
+- **Nothing marks a missing row as final.** Once the grace period is known, the report should show how long each item has been open.
+- **The state file keeps every row** (about 1.2 MB after two days) and each run re-matches all of them. With real volumes I'd keep only rows in open findings, plus recently matched ones so re-exports are still recognised.
+- **Amount differences can't be detected for rows without an id,** since amount is what matches them. A mistyped amount shows up as one missing row on each side.
+- **Provider rows without an id are recognised by their content** (amount, time, merchant). Two genuinely different payments identical to the second would be treated as one.
+- **Provider rows without an id can only be referenced by file and line** in the report.
+- The merchant names map one-to-one between the systems. That could be an extra check when matching rows without an id; I didn't need it for this data.
+
+## How I worked
+
+One branch and pull request per step, merged in this order:
+
+1. Add data exploration script and findings
+2. Match provider and ledger rows by transaction id
+3. Match rows without a transaction id on amount and time
+4. Keep state between runs and report only what changed
+5. Add a report written for finance
+
+Each PR description says what changed, the decisions behind it, and what it deliberately left out.
+
+Time spent: about _2.5_ hours.
+
+## Use of AI
+
+I used Claude, during the whole exercise, mostly to write and check things with.
+
+**What I used it for:**
+
+- Writing commit messages, PR descriptions and documentation (this README and `docs/DATA_EXPLORATION.md`)
+- Writing the tests
+- Thinking through edge cases in the data: late rows, re-exports, duplicate ids, rows without an id
+- Drafting functions in the matching, state and report code
+- Reviewing my code and the tool's output
